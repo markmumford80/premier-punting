@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Premier Punting</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+:root{--k:#000;--w:#FFF;--r:#F00;--g:#0F0;--y:#FF0;--b:#00F;--m:#F0F;--c:#0FF;--dim:#9A9A9A;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:dark}
+html{height:100%;background:var(--k);scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;min-height:100%;background:var(--k);color:var(--w);font-family:VT323,"Courier New",monospace;font-size:24px;line-height:1.25;text-transform:uppercase;letter-spacing:.02em}
+.screen{max-width:640px;margin:0 auto;padding:10px 12px 28px}
+.top{display:flex;justify-content:space-between;color:var(--w);font-size:22px}
+.top b{color:var(--c);font-weight:400}
+.title{background:var(--b);color:var(--y);font-size:clamp(34px,10vw,58px);line-height:1;padding:8px 10px 6px;margin:4px 0 0}
+.sub{background:var(--b);color:var(--w);padding:0 10px 4px;font-size:20px}
+.track{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;align-items:flex-start;-webkit-overflow-scrolling:touch;margin-top:14px}
+.track::-webkit-scrollbar{display:none}
+.card{flex:0 0 100%;scroll-snap-align:center}
+h2{margin:0 0 12px;background:var(--c);color:var(--k);font-weight:400;font-size:clamp(32px,9vw,46px);line-height:1;padding:6px 10px 4px}
+.pitch{display:flex;gap:3px;height:60px;border:3px solid var(--w);background:var(--k)}
+.seg{display:flex;align-items:center;justify-content:center;font-size:clamp(20px,5vw,30px);min-width:0;overflow:hidden}
+.legend{display:flex;flex-wrap:wrap;gap:2px 16px;margin:10px 0 14px;color:var(--y);font-size:20px}
+.legend i{display:inline-block;width:12px;height:12px;margin-right:6px;outline:2px solid var(--w)}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;align-items:baseline;gap:8px;padding:3px 0;font-size:24px}
+li i{flex:none;width:14px;height:14px;outline:2px solid var(--w);align-self:center}
+li .n{color:var(--w)}
+li .d{flex:1;border-bottom:3px dotted #666;min-width:12px;transform:translateY(-5px)}
+li .v{color:var(--y);text-align:right}
+li.out .n,li.out .v{color:var(--r)}
+li.tbc .v{color:var(--dim)}
+.err{color:var(--r);font-size:24px;margin:6px 0}
+li.out i{outline-color:var(--r);background:transparent}
+.pending{color:var(--g);font-size:28px;margin:6px 0}
+.pending::after{content:"_";animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.pending::after{animation:none}}
+.hint{color:var(--g);text-align:center;font-size:20px;margin:18px 0 10px}
+.fast{display:flex;gap:4px;margin-top:6px}
+.fast button{flex:1;font:inherit;font-size:22px;color:var(--k);border:0;padding:6px 2px 4px;cursor:pointer;text-transform:uppercase;min-width:0}
+.fast button:nth-child(4n+1){background:var(--r);color:var(--w)}
+.fast button:nth-child(4n+2){background:var(--g)}
+.fast button:nth-child(4n+3){background:var(--y)}
+.fast button:nth-child(4n+4){background:var(--c)}
+.fast button[aria-selected="true"]{box-shadow:inset 0 -6px 0 var(--k),inset 0 -9px 0 var(--w)}
+.fast button:focus-visible{outline:3px solid var(--w);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="screen">
+<div class="top"><span>P301</span><b>Weekly picks</b><span>1/1</span></div>
+<h1 class="title" style="font-weight:400">Premier Punting</h1>
+<div class="sub">Who is backing who</div>
+<p class="pending" id="status">Loading</p>
+<div class="track" id="track"></div>
+<p class="hint" id="hint">&lt; Swipe for other weeks &gt;</p>
+<div class="fast" id="tabs" role="tablist"></div>
+</div>
+<script>
+var CSV_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vSpBm_NCtGKURheldqN8xCKyVlHnnjqCZ_cjuhZu_4GPdbbOfT4hI6Clxd31u_7yoQqEoH5pSmpxZbc/pub?output=csv";
+var TEAMS={"arsenal":"#EF0107","coventry city":"#59CBE8","liverpool":"#B3121D","man city":"#6CABDD","man united":"#DA291C","chelsea":"#034694","tottenham":"#132257","spurs":"#132257","newcastle":"#2A2A2A","aston villa":"#7A003C","west ham":"#7A263A","everton":"#003399","brighton":"#0057B8","wolves":"#FDB913","fulham":"#CC0000","brentford":"#E30613","crystal palace":"#1B458F","bournemouth":"#DA291C","leeds":"#FFCD00","sunderland":"#EB172B","burnley":"#6C1D45","hull city":"#F5A12D","manchester city":"#6CABDD","manchester united":"#DA291C"};
+function colour(t){return TEAMS[t.toLowerCase()]||"#9CC3A5"}
+function textOn(h){var n=parseInt(h.slice(1),16),r=n>>16,g=n>>8&255,b=n&255;return(0.299*r+0.587*g+0.114*b)>150?"#000000":"#FFFFFF"}
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function kind(v){if(!v||/^(out|-+|n\/a)$/i.test(v))return"out";if(/^yet to be played/i.test(v))return"tbc";return"team"}
+
+function parseCSV(t){
+  var rows=[],row=[],f="",q=false;t=t.replace(/^\uFEFF/,"");
+  for(var i=0;i<t.length;i++){var c=t[i];
+    if(q){if(c=='"'){if(t[i+1]=='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c=='"')q=true;
+    else if(c==","){row.push(f);f=""}
+    else if(c=="\n"||c=="\r"){if(c=="\r"&&t[i+1]=="\n")i++;row.push(f);rows.push(row);row=[];f=""}
+    else f+=c}
+  if(f!==""||row.length){row.push(f);rows.push(row)}
+  return rows.filter(function(r){return r.some(function(x){return x.trim()})});
+}
+
+var track=document.getElementById("track"),tabs=document.getElementById("tabs"),statusEl=document.getElementById("status");
+var reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+var PLAYERS=[],WEEKS=[],first=true,lastLoad=0;
+
+function build(rows){
+  if(rows.length<2||rows[0].length<2)throw new Error("bad data");
+  var body=rows.slice(1);
+  PLAYERS=body.map(function(r){return(r[0]||"").trim()});
+  WEEKS=rows[0].slice(1).map(function(h,j){
+    var teams=body.map(function(r){return(r[j+1]||"").trim()});
+    var kinds=teams.map(kind);
+    var pending=kinds.indexOf("team")<0&&kinds.indexOf("tbc")>=0;
+    return{label:h.trim(),teams:teams,pending:pending};
+  });
+}
+
+function render(){
+  var keep=first?-1:current();
+  track.textContent="";tabs.textContent="";
+  WEEKS.forEach(function(w,wi){
+    var counts={},order=[];
+    w.teams.forEach(function(t){if(kind(t)!=="team")return;if(!counts[t]){counts[t]=0;order.push(t)}counts[t]++});
+    order.sort(function(a,b){return counts[b]-counts[a]});
+    var total=order.reduce(function(s,t){return s+counts[t]},0)||1;
+    var card=el("section","card");card.setAttribute("aria-label",w.label);
+    card.appendChild(el("h2",null,w.label));
+    var pitch=el("div","pitch"),legend=el("div","legend");
+    pitch.setAttribute("role","img");
+    pitch.setAttribute("aria-label",order.map(function(t){return t+" "+counts[t]}).join(", "));
+    order.forEach(function(t){
+      var s=el("div","seg",Math.round(counts[t]/total*100)+"%");
+      s.style.flex=counts[t]+" 1 0";s.style.background=colour(t);s.style.color=textOn(colour(t));
+      pitch.appendChild(s);
+      var l=el("span"),d=el("i");d.style.background=colour(t);
+      l.appendChild(d);l.appendChild(document.createTextNode(t+(counts[t]>1?" ("+counts[t]+")":"")));
+      legend.appendChild(l);
+    });
+    if(!w.pending){card.appendChild(pitch);card.appendChild(legend)}else{card.appendChild(el("p","pending","Yet to be played"))}
+    var ul=el("ul");
+    PLAYERS.forEach(function(p,i){
+      var t=w.teams[i],k=kind(t),li=el("li",k==="team"?null:k),m=el("i");
+      if(k==="team")m.style.background=colour(t);
+      li.appendChild(m);li.appendChild(el("span","n",p));li.appendChild(el("span","d"));
+      li.appendChild(el("span","v",k==="team"?t:k==="tbc"?"TBC":"Out"));
+      ul.appendChild(li);
+    });
+    if(!w.pending)card.appendChild(ul);
+    track.appendChild(card);
+    var b=el("button",null,w.label);b.type="button";b.setAttribute("role","tab");
+    b.addEventListener("click",function(){go(wi,true)});
+    tabs.appendChild(b);
+  });
+  document.getElementById("hint").hidden=WEEKS.length<2;
+  var s=keep;
+  if(s<0){s=0;WEEKS.forEach(function(w,i){if(!w.pending)s=i})}
+  go(Math.min(s,WEEKS.length-1),false);mark();first=false;
+}
+
+function current(){return Math.max(0,Math.min(WEEKS.length-1,Math.round(track.scrollLeft/(track.clientWidth+14))))}
+function mark(){var c=current();Array.prototype.forEach.call(tabs.children,function(b,i){b.setAttribute("aria-selected",i===c?"true":"false")});document.querySelector(".top span:last-child").textContent=(c+1)+"/"+WEEKS.length}
+function go(i,smooth){track.scrollTo({left:i*(track.clientWidth+14),behavior:smooth&&!reduce?"smooth":"auto"})}
+track.addEventListener("scroll",mark);
+window.addEventListener("resize",function(){go(current(),false)});
+
+function show(msg,cls){statusEl.hidden=!msg;statusEl.className=cls||"pending";statusEl.textContent=msg||""}
+function load(){
+  lastLoad=Date.now();
+  fetch(CSV_URL,{cache:"no-store"}).then(function(r){if(!r.ok)throw new Error("http");return r.text()}).then(function(t){
+    build(parseCSV(t));render();show("");
+    try{localStorage.setItem("pp-csv",t)}catch(e){}
+  }).catch(function(){
+    var c=null;try{c=localStorage.getItem("pp-csv")}catch(e){}
+    if(c){try{build(parseCSV(c));render();show("Offline - showing last saved page","err");return}catch(e){}}
+    show("Sorry - page not available","err");
+  });
+}
+document.addEventListener("visibilitychange",function(){if(!document.hidden&&Date.now()-lastLoad>60000)load()});
+load();
+</script>
+</body>
+</html>
